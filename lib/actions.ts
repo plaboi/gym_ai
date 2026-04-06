@@ -72,7 +72,12 @@ async function callGemini(prompt: string): Promise<GeneratedExercise[]> {
     throw new Error("Failed to parse workout from AI response");
   }
 
-  return JSON.parse(jsonMatch[0]);
+  const raw: Record<string, unknown>[] = JSON.parse(jsonMatch[0]);
+  return raw.map((item) => ({
+    name: String(item.name ?? item.exercise ?? "Unknown"),
+    recommended_sets: Number(item.recommended_sets ?? item.sets ?? 3),
+    recommended_reps: Number(item.recommended_reps ?? item.reps ?? 10),
+  }));
 }
 
 export async function generateWorkout(
