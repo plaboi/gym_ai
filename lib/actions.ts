@@ -49,17 +49,71 @@ async function getWorkoutHistory(userId: string): Promise<string> {
   return `Recent workout history (newest first):\n${entries.join("\n")}`;
 }
 
+export interface UserProfile {
+  name: string | null;
+  age: number | null;
+  gender: string | null;
+}
+
+export interface StructuredPrefs {
+  goal: string;
+  prioritizeGoal: boolean;
+  requirements: string;
+  preferences: string;
+}
+
 async function getPreferencesPromptBlock(userId: string): Promise<string> {
+  const user = await db.query.users.findFirst({
+    where: eq(users.id, userId),
+  });
+
   const rows = await db
     .select()
     .from(userPreferences)
     .where(eq(userPreferences.userId, userId))
     .limit(1);
-  const text = rows[0]?.content?.trim() ?? "";
-  if (!text) {
+  const raw = rows[0]?.content?.trim() ?? "";
+
+  const lines: string[] = [];
+
+  if (user?.age || user?.gender) {
+    const parts: string[] = [];
+    if (user.age) parts.push(`${user.age}-year-old`);
+    if (user.gender) parts.push(user.gender);
+    lines.push(`User profile: ${parts.join(" ")}`);
+  }
+
+  let prefs: StructuredPrefs | null = null;
+  try {
+    prefs = JSON.parse(raw) as StructuredPrefs;
+  } catch {
+    if (raw) {
+      return lines.length > 0
+        ? `${lines.join("\n")}\nWorkout preferences:\n${raw}`
+        : `Workout preferences:\n${raw}`;
+    }
+  }
+
+  if (prefs) {
+    if (prefs.goal) {
+      const priority = prefs.prioritizeGoal
+        ? " (HIGH PRIORITY -- tailor exercises toward this goal)"
+        : "";
+      lines.push(`Primary goal: ${prefs.goal}${priority}`);
+    }
+    if (prefs.requirements.trim()) {
+      lines.push(`Requirements (must follow): ${prefs.requirements.trim()}`);
+    }
+    if (prefs.preferences.trim()) {
+      lines.push(`Preferences (try to follow): ${prefs.preferences.trim()}`);
+    }
+  }
+
+  if (lines.length === 0) {
     return "The user has not set any persistent workout preferences.";
   }
-  return `The user's persistent workout preferences (always honor these; still vary exercises and avoid repeating recent workouts unnecessarily):\n${text}`;
+
+  return `The user's profile and workout preferences (always honor these; still vary exercises and avoid repeating recent workouts unnecessarily):\n${lines.join("\n")}`;
 }
 
 async function callGemini(prompt: string): Promise<GeneratedExercise[]> {
@@ -163,8 +217,19 @@ async function appendPreferenceLine(userId: string, line: string): Promise<void>
     .from(userPreferences)
     .where(eq(userPreferences.userId, userId))
     .limit(1);
-  const prev = rows[0]?.content?.trim() ?? "";
-  const next = prev ? `${prev}\n${line}` : line;
+  const raw = rows[0]?.content?.trim() ?? "";
+
+  let prefs: StructuredPrefs;
+  try {
+    prefs = JSON.parse(raw) as StructuredPrefs;
+  } catch {
+    prefs = { goal: "", prioritizeGoal: false, requirements: raw, preferences: "" };
+  }
+  prefs.requirements = prefs.requirements.trim()
+    ? `${prefs.requirements.trim()}\n${line}`
+    : line;
+  const next = JSON.stringify(prefs);
+
   await db
     .insert(userPreferences)
     .values({ userId, content: next, updatedAt: new Date() })
@@ -274,22 +339,36 @@ export async function getLastWorkoutTimestamp(): Promise<string | null> {
   }
 }
 
-export async function getUserName(clerkId: string): Promise<string | null> {
+export async function getUserProfile(
+  clerkId: string
+): Promise<UserProfile | null> {
   try {
     const user = await db.query.users.findFirst({
       where: eq(users.clerkId, clerkId),
     });
-    return user?.name ?? null;
+    if (!user) return null;
+    return {
+      name: user.name ?? null,
+      age: user.age ?? null,
+      gender: user.gender ?? null,
+    };
   } catch {
     return null;
   }
 }
 
-export async function saveName(name: string): Promise<string> {
+export async function saveProfile(
+  name: string,
+  age: number,
+  gender: string
+): Promise<UserProfile> {
   const userId = await ensureUser();
-  const trimmed = name.trim();
-  await db.update(users).set({ name: trimmed }).where(eq(users.id, userId));
-  return trimmed;
+  const trimmedName = name.trim();
+  await db
+    .update(users)
+    .set({ name: trimmedName, age, gender })
+    .where(eq(users.id, userId));
+  return { name: trimmedName, age, gender };
 }
 
 export interface HistoryExercise {

@@ -1,28 +1,31 @@
-type BodyHighlighterMuscle =
-  | "trapezius"
-  | "upper-back"
-  | "lower-back"
-  | "chest"
-  | "biceps"
-  | "triceps"
-  | "forearm"
-  | "back-deltoids"
-  | "front-deltoids"
+type Slug =
   | "abs"
-  | "obliques"
-  | "adductor"
-  | "hamstring"
-  | "quadriceps"
-  | "abductors"
+  | "adductors"
+  | "ankles"
+  | "biceps"
   | "calves"
+  | "chest"
+  | "deltoids"
+  | "feet"
+  | "forearm"
   | "gluteal"
+  | "hamstring"
+  | "hands"
   | "head"
-  | "neck";
+  | "knees"
+  | "lower-back"
+  | "neck"
+  | "obliques"
+  | "quadriceps"
+  | "tibialis"
+  | "trapezius"
+  | "triceps"
+  | "upper-back";
 
-const MUSCLE_ALIAS: Record<string, BodyHighlighterMuscle[]> = {
+const MUSCLE_ALIAS: Record<string, Slug[]> = {
   abdominals: ["abs"],
-  abductors: ["abductors"],
-  adductors: ["adductor"],
+  abductors: ["adductors"],
+  adductors: ["adductors"],
   biceps: ["biceps"],
   calves: ["calves"],
   chest: ["chest"],
@@ -34,16 +37,26 @@ const MUSCLE_ALIAS: Record<string, BodyHighlighterMuscle[]> = {
   "middle back": ["upper-back"],
   neck: ["neck"],
   quadriceps: ["quadriceps"],
-  shoulders: ["front-deltoids", "back-deltoids"],
+  shoulders: ["deltoids"],
   traps: ["trapezius"],
   triceps: ["triceps"],
 };
 
-export function mapMuscles(dbMuscles: string[]): BodyHighlighterMuscle[] {
-  const result = new Set<BodyHighlighterMuscle>();
+export interface MuscleSlug {
+  slug: Slug;
+  intensity: number;
+  color: string;
+}
+
+export function mapMuscles(dbMuscles: string[]): MuscleSlug[] {
+  const slugSet = new Set<Slug>();
   for (const m of dbMuscles) {
     const mapped = MUSCLE_ALIAS[m.toLowerCase()];
-    if (mapped) mapped.forEach((x) => result.add(x));
+    if (mapped) mapped.forEach((x) => slugSet.add(x));
   }
-  return [...result];
+  return [...slugSet].map((slug) => ({
+    slug,
+    intensity: 1,
+    color: "#ffffff",
+  }));
 }

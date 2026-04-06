@@ -3,16 +3,23 @@
 import { useState, useEffect, useMemo, useTransition } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { UserButton } from "@clerk/nextjs";
-import { saveUserPreferences, saveName } from "@/lib/actions";
+import { saveUserPreferences, saveProfile } from "@/lib/actions";
 import { useTimer } from "../hooks/use-timer";
-import type { WorkoutHistoryEntry } from "../app-shell";
+import type { WorkoutHistoryEntry, UserProfile } from "../app-shell";
 
 interface LandingScreenProps {
   lastWorkoutAt: string | null;
   initialPreferences: string;
   workoutHistory: WorkoutHistoryEntry[];
-  userName: string | null;
+  userProfile: UserProfile | null;
   onStart: () => void;
+}
+
+interface StructuredPrefs {
+  goal: string;
+  prioritizeGoal: boolean;
+  requirements: string;
+  preferences: string;
 }
 
 const SPLIT_LABELS: Record<string, string> = {
@@ -22,6 +29,38 @@ const SPLIT_LABELS: Record<string, string> = {
 };
 
 const DAY_NAMES = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+
+const GOALS = [
+  "Lose weight",
+  "Build muscle",
+  "Improve endurance",
+  "General fitness",
+];
+
+const GENDER_OPTIONS = [
+  { value: "male", label: "Male" },
+  { value: "female", label: "Female" },
+  { value: "other", label: "Other" },
+];
+
+function parsePrefs(raw: string): StructuredPrefs {
+  try {
+    const parsed = JSON.parse(raw);
+    return {
+      goal: parsed.goal ?? "",
+      prioritizeGoal: parsed.prioritizeGoal ?? false,
+      requirements: parsed.requirements ?? "",
+      preferences: parsed.preferences ?? "",
+    };
+  } catch {
+    return {
+      goal: "",
+      prioritizeGoal: false,
+      requirements: raw,
+      preferences: "",
+    };
+  }
+}
 
 function TimeSinceCounter({ iso }: { iso: string }) {
   const startTime = new Date(iso).getTime();
@@ -212,36 +251,278 @@ function CalendarView({
   );
 }
 
-export default function LandingScreen({
-  lastWorkoutAt,
+function OnboardingFlow({
+  onComplete,
+}: {
+  onComplete: (profile: UserProfile) => void;
+}) {
+  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [name, setName] = useState("");
+  const [age, setAge] = useState("");
+  const [gender, setGender] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const handleFinish = async (selectedGender: string) => {
+    setSaving(true);
+    try {
+      const profile = await saveProfile(
+        name,
+        parseInt(age, 10),
+        selectedGender
+      );
+      onComplete(profile);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <AnimatePresence mode="wait">
+      {step === 1 && (
+        <motion.div
+          key="step1"
+          className="flex w-full max-w-xs flex-col items-center gap-6"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -20 }}
+          transition={{ duration: 0.3 }}
+        >
+          <h2 className="text-xl font-semibold text-white">
+            What&apos;s your name?
+          </h2>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (name.trim()) setStep(2);
+            }}
+            className="flex w-full flex-col gap-4"
+          >
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Your first name"
+              autoFocus
+              className="w-full rounded-xl border border-white/10 bg-card px-4 py-3 text-center text-base text-white placeholder-white/25 outline-none focus:border-white/30"
+            />
+            <button
+              type="submit"
+              disabled={!name.trim()}
+              className="w-full rounded-2xl bg-white py-3 text-base font-semibold text-black disabled:opacity-40"
+            >
+              Next
+            </button>
+          </form>
+        </motion.div>
+      )}
+
+      {step === 2 && (
+        <motion.div
+          key="step2"
+          className="flex w-full max-w-xs flex-col items-center gap-6"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -20 }}
+          transition={{ duration: 0.3 }}
+        >
+          <h2 className="text-xl font-semibold text-white">
+            How old are you?
+          </h2>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              const num = parseInt(age, 10);
+              if (num > 0 && num < 120) setStep(3);
+            }}
+            className="flex w-full flex-col gap-4"
+          >
+            <input
+              type="number"
+              value={age}
+              onChange={(e) => setAge(e.target.value)}
+              placeholder="Age"
+              min={1}
+              max={120}
+              autoFocus
+              className="w-full rounded-xl border border-white/10 bg-card px-4 py-3 text-center text-base text-white placeholder-white/25 outline-none focus:border-white/30 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+            />
+            <button
+              type="submit"
+              disabled={!age || parseInt(age, 10) <= 0}
+              className="w-full rounded-2xl bg-white py-3 text-base font-semibold text-black disabled:opacity-40"
+            >
+              Next
+            </button>
+          </form>
+        </motion.div>
+      )}
+
+      {step === 3 && (
+        <motion.div
+          key="step3"
+          className="flex w-full max-w-xs flex-col items-center gap-6"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -20 }}
+          transition={{ duration: 0.3 }}
+        >
+          <h2 className="text-xl font-semibold text-white">Gender</h2>
+          <div className="flex w-full gap-2">
+            {GENDER_OPTIONS.map((opt) => (
+              <button
+                key={opt.value}
+                onClick={() => setGender(opt.value)}
+                className={`flex-1 rounded-xl border py-3 text-sm font-medium transition-colors ${
+                  gender === opt.value
+                    ? "border-white bg-white text-black"
+                    : "border-white/10 text-white/60 hover:border-white/30"
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={() => handleFinish(gender)}
+            disabled={!gender || saving}
+            className="w-full rounded-2xl bg-white py-3 text-base font-semibold text-black disabled:opacity-40"
+          >
+            {saving ? "Saving..." : "Continue"}
+          </button>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
+function PreferencesEditor({
   initialPreferences,
-  workoutHistory,
-  userName,
-  onStart,
-}: LandingScreenProps) {
-  const [tab, setTab] = useState<"home" | "history">("home");
-  const [showPrefs, setShowPrefs] = useState(false);
-  const [prefsDraft, setPrefsDraft] = useState(initialPreferences);
+}: {
+  initialPreferences: string;
+}) {
+  const [prefs, setPrefs] = useState<StructuredPrefs>(() =>
+    parsePrefs(initialPreferences)
+  );
   const [savedFlash, setSavedFlash] = useState(false);
   const [isPending, startTransition] = useTransition();
-  const [displayName, setDisplayName] = useState(userName);
-  const [nameInput, setNameInput] = useState("");
-  const [savingName, setSavingName] = useState(false);
 
   useEffect(() => {
-    setPrefsDraft(initialPreferences);
+    setPrefs(parsePrefs(initialPreferences));
   }, [initialPreferences]);
 
   useEffect(() => {
     setSavedFlash(false);
-  }, [prefsDraft]);
+  }, [prefs]);
 
-  const handleSavePrefs = () => {
+  const handleSave = () => {
     startTransition(async () => {
-      await saveUserPreferences(prefsDraft);
+      await saveUserPreferences(JSON.stringify(prefs));
       setSavedFlash(true);
     });
   };
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div>
+        <p className="mb-2 text-xs font-medium text-white/50">Goal</p>
+        <div className="flex flex-wrap gap-2">
+          {GOALS.map((g) => (
+            <button
+              key={g}
+              onClick={() =>
+                setPrefs((p) => ({ ...p, goal: p.goal === g ? "" : g }))
+              }
+              className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+                prefs.goal === g
+                  ? "border-white bg-white text-black"
+                  : "border-white/10 text-white/50 hover:border-white/30"
+              }`}
+            >
+              {g}
+            </button>
+          ))}
+        </div>
+        {prefs.goal && (
+          <label className="mt-2 flex cursor-pointer items-center gap-2">
+            <input
+              type="checkbox"
+              checked={prefs.prioritizeGoal}
+              onChange={(e) =>
+                setPrefs((p) => ({ ...p, prioritizeGoal: e.target.checked }))
+              }
+              className="h-3.5 w-3.5 rounded border-white/30 bg-card accent-white"
+            />
+            <span className="text-[11px] text-white/40">
+              Prioritize this goal
+            </span>
+          </label>
+        )}
+      </div>
+
+      <div>
+        <p className="mb-1.5 text-xs font-medium text-white/50">
+          Requirements
+        </p>
+        <p className="mb-2 text-[10px] text-white/25">
+          Hard rules the AI must always follow
+        </p>
+        <textarea
+          value={prefs.requirements}
+          onChange={(e) =>
+            setPrefs((p) => ({ ...p, requirements: e.target.value }))
+          }
+          rows={3}
+          placeholder="e.g. No free weights for legs. No overhead press."
+          className="w-full resize-none rounded-xl border border-white/10 bg-card px-3 py-2.5 text-sm text-white placeholder-white/20 outline-none focus:border-white/25"
+        />
+      </div>
+
+      <div>
+        <p className="mb-1.5 text-xs font-medium text-white/50">Preferences</p>
+        <p className="mb-2 text-[10px] text-white/25">
+          Soft preferences the AI should try to follow
+        </p>
+        <textarea
+          value={prefs.preferences}
+          onChange={(e) =>
+            setPrefs((p) => ({ ...p, preferences: e.target.value }))
+          }
+          rows={3}
+          placeholder="e.g. Prefer machines. Like supersets."
+          className="w-full resize-none rounded-xl border border-white/10 bg-card px-3 py-2.5 text-sm text-white placeholder-white/20 outline-none focus:border-white/25"
+        />
+      </div>
+
+      <div className="flex items-center justify-between gap-2">
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={isPending}
+          className="rounded-xl bg-white/10 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-white/20 disabled:opacity-40"
+        >
+          {isPending ? "Saving..." : "Save"}
+        </button>
+        {savedFlash && (
+          <span className="text-xs text-emerald-400/90">Saved</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default function LandingScreen({
+  lastWorkoutAt,
+  initialPreferences,
+  workoutHistory,
+  userProfile,
+  onStart,
+}: LandingScreenProps) {
+  const [tab, setTab] = useState<"home" | "history">("home");
+  const [showPrefs, setShowPrefs] = useState(false);
+  const [profile, setProfile] = useState<UserProfile | null>(userProfile);
+
+  const needsOnboarding = !profile?.name;
+  const displayName = profile?.name ?? null;
 
   return (
     <motion.div
@@ -285,48 +566,8 @@ export default function LandingScreen({
               exit={{ opacity: 0, x: -20 }}
               transition={{ duration: 0.25 }}
             >
-              {!displayName ? (
-                <motion.div
-                  className="flex w-full max-w-xs flex-col items-center gap-6"
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.4 }}
-                >
-                  <h2 className="text-xl font-semibold text-white">
-                    What&apos;s your name?
-                  </h2>
-                  <form
-                    onSubmit={async (e) => {
-                      e.preventDefault();
-                      const trimmed = nameInput.trim();
-                      if (!trimmed || savingName) return;
-                      setSavingName(true);
-                      try {
-                        const saved = await saveName(trimmed);
-                        setDisplayName(saved);
-                      } finally {
-                        setSavingName(false);
-                      }
-                    }}
-                    className="flex w-full flex-col gap-4"
-                  >
-                    <input
-                      type="text"
-                      value={nameInput}
-                      onChange={(e) => setNameInput(e.target.value)}
-                      placeholder="Your first name"
-                      autoFocus
-                      className="w-full rounded-xl border border-white/10 bg-card px-4 py-3 text-center text-base text-white placeholder-white/25 outline-none focus:border-white/30"
-                    />
-                    <button
-                      type="submit"
-                      disabled={!nameInput.trim() || savingName}
-                      className="w-full rounded-2xl bg-white py-3 text-base font-semibold text-black disabled:opacity-40"
-                    >
-                      {savingName ? "Saving..." : "Continue"}
-                    </button>
-                  </form>
-                </motion.div>
+              {needsOnboarding ? (
+                <OnboardingFlow onComplete={(p) => setProfile(p)} />
               ) : (
                 <>
                   <motion.p
@@ -385,44 +626,21 @@ export default function LandingScreen({
                       className="w-full text-center text-xs tracking-wide text-white/40 underline-offset-4 hover:text-white/60 hover:underline"
                     >
                       {showPrefs
-                        ? "Hide workout rules"
-                        : "Workout rules"}
+                        ? "Hide preferences"
+                        : "Workout preferences & goals"}
                     </button>
 
                     <AnimatePresence>
                       {showPrefs && (
                         <motion.div
-                          className="mt-4 flex flex-col gap-3"
+                          className="mt-4"
                           initial={{ opacity: 0, height: 0 }}
                           animate={{ opacity: 1, height: "auto" }}
                           exit={{ opacity: 0, height: 0 }}
                         >
-                          <p className="text-center text-[11px] leading-relaxed text-white/30">
-                            The AI reads this every time it builds or adjusts a
-                            workout. One rule per line works well.
-                          </p>
-                          <textarea
-                            value={prefsDraft}
-                            onChange={(e) => setPrefsDraft(e.target.value)}
-                            rows={5}
-                            placeholder="e.g. No free weights on leg day. Prefer machines."
-                            className="w-full resize-none rounded-xl border border-white/10 bg-card px-3 py-2.5 text-sm text-white placeholder-white/25 outline-none focus:border-white/25"
+                          <PreferencesEditor
+                            initialPreferences={initialPreferences}
                           />
-                          <div className="flex items-center justify-between gap-2">
-                            <button
-                              type="button"
-                              onClick={handleSavePrefs}
-                              disabled={isPending}
-                              className="rounded-xl bg-white/10 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-white/20 disabled:opacity-40"
-                            >
-                              {isPending ? "Saving..." : "Save rules"}
-                            </button>
-                            {savedFlash && (
-                              <span className="text-xs text-emerald-400/90">
-                                Saved
-                              </span>
-                            )}
-                          </div>
                         </motion.div>
                       )}
                     </AnimatePresence>

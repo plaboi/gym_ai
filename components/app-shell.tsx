@@ -36,18 +36,24 @@ export interface WorkoutHistoryEntry {
   exercises: HistoryExercise[];
 }
 
+export interface UserProfile {
+  name: string | null;
+  age: number | null;
+  gender: string | null;
+}
+
 interface AppShellProps {
   lastWorkoutAt: string | null;
   initialPreferences: string;
   workoutHistory: WorkoutHistoryEntry[];
-  userName: string | null;
+  userProfile: UserProfile | null;
 }
 
 export default function AppShell({
   lastWorkoutAt,
   initialPreferences,
   workoutHistory,
-  userName,
+  userProfile,
 }: AppShellProps) {
   const router = useRouter();
   const [screen, setScreen] = useState<Screen>("landing");
@@ -92,7 +98,7 @@ export default function AppShell({
           lastWorkoutAt={lastWorkoutAt}
           initialPreferences={initialPreferences}
           workoutHistory={workoutHistory}
-          userName={userName}
+          userProfile={userProfile}
           onStart={handleStart}
         />
       )}
@@ -121,6 +127,7 @@ export default function AppShell({
           duration={duration}
           exercises={exercises}
           startTime={startTimeRef.current}
+          userGender={userProfile?.gender ?? null}
           onFinish={handleFinish}
         />
       )}

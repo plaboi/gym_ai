@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useTransition } from "react";
 import { motion } from "framer-motion";
-import Model from "react-body-highlighter";
+import Body from "react-muscle-highlighter";
 import { completeWorkout } from "@/lib/actions";
 import { lookupExercise } from "@/lib/exercise-lookup";
 import { mapMuscles } from "@/lib/muscle-map";
@@ -13,6 +13,7 @@ interface SummaryScreenProps {
   duration: number;
   exercises: GeneratedExercise[];
   startTime: number;
+  userGender: string | null;
   onFinish: () => void;
 }
 
@@ -27,6 +28,7 @@ export default function SummaryScreen({
   duration,
   exercises,
   startTime,
+  userGender,
   onFinish,
 }: SummaryScreenProps) {
   const [saving, setSaving] = useState(false);
@@ -44,17 +46,17 @@ export default function SummaryScreen({
     0
   );
 
-  const bodyData = useMemo(
-    () =>
-      exercises.map((ex) => {
-        const info = lookupExercise(ex.name);
-        return {
-          name: ex.name,
-          muscles: mapMuscles([...info.primaryMuscles, ...info.secondaryMuscles]),
-        };
-      }),
-    [exercises]
-  );
+  const bodyData = useMemo(() => {
+    const allMuscles: string[] = [];
+    for (const ex of exercises) {
+      const info = lookupExercise(ex.name);
+      allMuscles.push(...info.primaryMuscles, ...info.secondaryMuscles);
+    }
+    return mapMuscles(allMuscles);
+  }, [exercises]);
+
+  const gender: "male" | "female" =
+    userGender === "female" ? "female" : "male";
 
   const handleFinish = () => {
     setSaving(true);
@@ -96,23 +98,28 @@ export default function SummaryScreen({
       </motion.div>
 
       <motion.div
-        className="my-6 flex items-center justify-center gap-2"
+        className="my-6 flex items-center justify-center gap-4"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.3 }}
       >
-        <Model
+        <Body
           data={bodyData}
-          style={{ width: "9rem" }}
-          bodyColor="#1a1a1a"
-          highlightedColors={["#ffffff"]}
+          side="front"
+          gender={gender}
+          scale={1.2}
+          border="none"
+          defaultFill="#1a1a1a"
+          colors={["#ffffff"]}
         />
-        <Model
+        <Body
           data={bodyData}
-          style={{ width: "9rem" }}
-          type="posterior"
-          bodyColor="#1a1a1a"
-          highlightedColors={["#ffffff"]}
+          side="back"
+          gender={gender}
+          scale={1.2}
+          border="none"
+          defaultFill="#1a1a1a"
+          colors={["#ffffff"]}
         />
       </motion.div>
 
