@@ -5,6 +5,7 @@ import { eq, desc } from "drizzle-orm";
 import AppShell from "@/components/app-shell";
 import {
   getWorkoutHistoryForCalendar,
+  getUserName,
   type WorkoutHistoryEntry,
 } from "@/lib/actions";
 
@@ -56,12 +57,14 @@ export default async function Home() {
   const workoutHistory: WorkoutHistoryEntry[] = userId
     ? await getWorkoutHistoryForCalendar(userId)
     : [];
+  const userName = userId ? await getUserName(userId) : null;
 
   return (
     <AppShell
       lastWorkoutAt={lastWorkoutAt}
       initialPreferences={initialPreferences}
       workoutHistory={workoutHistory}
+      userName={userName}
     />
   );
 }

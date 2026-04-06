@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, useTransition } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { UserButton } from "@clerk/nextjs";
-import { saveUserPreferences } from "@/lib/actions";
+import { saveUserPreferences, saveName } from "@/lib/actions";
 import { useTimer } from "../hooks/use-timer";
 import type { WorkoutHistoryEntry } from "../app-shell";
 
@@ -11,6 +11,7 @@ interface LandingScreenProps {
   lastWorkoutAt: string | null;
   initialPreferences: string;
   workoutHistory: WorkoutHistoryEntry[];
+  userName: string | null;
   onStart: () => void;
 }
 
@@ -215,6 +216,7 @@ export default function LandingScreen({
   lastWorkoutAt,
   initialPreferences,
   workoutHistory,
+  userName,
   onStart,
 }: LandingScreenProps) {
   const [tab, setTab] = useState<"home" | "history">("home");
@@ -222,6 +224,9 @@ export default function LandingScreen({
   const [prefsDraft, setPrefsDraft] = useState(initialPreferences);
   const [savedFlash, setSavedFlash] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const [displayName, setDisplayName] = useState(userName);
+  const [nameInput, setNameInput] = useState("");
+  const [savingName, setSavingName] = useState(false);
 
   useEffect(() => {
     setPrefsDraft(initialPreferences);
@@ -280,93 +285,150 @@ export default function LandingScreen({
               exit={{ opacity: 0, x: -20 }}
               transition={{ duration: 0.25 }}
             >
-              <motion.button
-                onClick={onStart}
-                className="relative h-20 w-20 shrink-0 rounded-full bg-white font-semibold tracking-wider text-black uppercase"
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                animate={{
-                  boxShadow: [
-                    "0 0 0px rgba(255,255,255,0.0)",
-                    "0 0 30px rgba(255,255,255,0.15)",
-                    "0 0 0px rgba(255,255,255,0.0)",
-                  ],
-                }}
-                transition={{
-                  boxShadow: {
-                    repeat: Infinity,
-                    duration: 2.5,
-                    ease: "easeInOut",
-                  },
-                }}
-              >
-                Start
-              </motion.button>
-
-              <div className="mt-6 shrink-0">
-                {lastWorkoutAt ? (
-                  <TimeSinceCounter iso={lastWorkoutAt} />
-                ) : (
-                  <motion.p
-                    className="text-xs text-white/25"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: 0.5 }}
-                  >
-                    Ready for your first workout
-                  </motion.p>
-                )}
-              </div>
-
-              <div className="mt-8 w-full max-w-sm">
-                <button
-                  type="button"
-                  onClick={() => setShowPrefs((v) => !v)}
-                  className="w-full text-center text-xs tracking-wide text-white/40 underline-offset-4 hover:text-white/60 hover:underline"
+              {!displayName ? (
+                <motion.div
+                  className="flex w-full max-w-xs flex-col items-center gap-6"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.4 }}
                 >
-                  {showPrefs
-                    ? "Hide workout rules"
-                    : "Workout rules"}
-                </button>
-
-                <AnimatePresence>
-                  {showPrefs && (
-                    <motion.div
-                      className="mt-4 flex flex-col gap-3"
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: "auto" }}
-                      exit={{ opacity: 0, height: 0 }}
+                  <h2 className="text-xl font-semibold text-white">
+                    What&apos;s your name?
+                  </h2>
+                  <form
+                    onSubmit={async (e) => {
+                      e.preventDefault();
+                      const trimmed = nameInput.trim();
+                      if (!trimmed || savingName) return;
+                      setSavingName(true);
+                      try {
+                        const saved = await saveName(trimmed);
+                        setDisplayName(saved);
+                      } finally {
+                        setSavingName(false);
+                      }
+                    }}
+                    className="flex w-full flex-col gap-4"
+                  >
+                    <input
+                      type="text"
+                      value={nameInput}
+                      onChange={(e) => setNameInput(e.target.value)}
+                      placeholder="Your first name"
+                      autoFocus
+                      className="w-full rounded-xl border border-white/10 bg-card px-4 py-3 text-center text-base text-white placeholder-white/25 outline-none focus:border-white/30"
+                    />
+                    <button
+                      type="submit"
+                      disabled={!nameInput.trim() || savingName}
+                      className="w-full rounded-2xl bg-white py-3 text-base font-semibold text-black disabled:opacity-40"
                     >
-                      <p className="text-center text-[11px] leading-relaxed text-white/30">
-                        The AI reads this every time it builds or adjusts a
-                        workout. One rule per line works well.
-                      </p>
-                      <textarea
-                        value={prefsDraft}
-                        onChange={(e) => setPrefsDraft(e.target.value)}
-                        rows={5}
-                        placeholder="e.g. No free weights on leg day. Prefer machines."
-                        className="w-full resize-none rounded-xl border border-white/10 bg-card px-3 py-2.5 text-sm text-white placeholder-white/25 outline-none focus:border-white/25"
-                      />
-                      <div className="flex items-center justify-between gap-2">
-                        <button
-                          type="button"
-                          onClick={handleSavePrefs}
-                          disabled={isPending}
-                          className="rounded-xl bg-white/10 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-white/20 disabled:opacity-40"
+                      {savingName ? "Saving..." : "Continue"}
+                    </button>
+                  </form>
+                </motion.div>
+              ) : (
+                <>
+                  <motion.p
+                    className="mb-6 text-lg text-white/50"
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.15 }}
+                  >
+                    {lastWorkoutAt
+                      ? `Hello again, ${displayName}`
+                      : `Hi ${displayName}, ready to start?`}
+                  </motion.p>
+
+                  <motion.button
+                    onClick={onStart}
+                    className="relative h-20 w-20 shrink-0 rounded-full bg-white font-semibold tracking-wider text-black uppercase"
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    animate={{
+                      boxShadow: [
+                        "0 0 0px rgba(255,255,255,0.0)",
+                        "0 0 30px rgba(255,255,255,0.15)",
+                        "0 0 0px rgba(255,255,255,0.0)",
+                      ],
+                    }}
+                    transition={{
+                      boxShadow: {
+                        repeat: Infinity,
+                        duration: 2.5,
+                        ease: "easeInOut",
+                      },
+                    }}
+                  >
+                    Start
+                  </motion.button>
+
+                  <div className="mt-6 shrink-0">
+                    {lastWorkoutAt ? (
+                      <TimeSinceCounter iso={lastWorkoutAt} />
+                    ) : (
+                      <motion.p
+                        className="text-xs text-white/25"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ delay: 0.5 }}
+                      >
+                        Ready for your first workout
+                      </motion.p>
+                    )}
+                  </div>
+
+                  <div className="mt-8 w-full max-w-sm">
+                    <button
+                      type="button"
+                      onClick={() => setShowPrefs((v) => !v)}
+                      className="w-full text-center text-xs tracking-wide text-white/40 underline-offset-4 hover:text-white/60 hover:underline"
+                    >
+                      {showPrefs
+                        ? "Hide workout rules"
+                        : "Workout rules"}
+                    </button>
+
+                    <AnimatePresence>
+                      {showPrefs && (
+                        <motion.div
+                          className="mt-4 flex flex-col gap-3"
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: "auto" }}
+                          exit={{ opacity: 0, height: 0 }}
                         >
-                          {isPending ? "Saving..." : "Save rules"}
-                        </button>
-                        {savedFlash && (
-                          <span className="text-xs text-emerald-400/90">
-                            Saved
-                          </span>
-                        )}
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
+                          <p className="text-center text-[11px] leading-relaxed text-white/30">
+                            The AI reads this every time it builds or adjusts a
+                            workout. One rule per line works well.
+                          </p>
+                          <textarea
+                            value={prefsDraft}
+                            onChange={(e) => setPrefsDraft(e.target.value)}
+                            rows={5}
+                            placeholder="e.g. No free weights on leg day. Prefer machines."
+                            className="w-full resize-none rounded-xl border border-white/10 bg-card px-3 py-2.5 text-sm text-white placeholder-white/25 outline-none focus:border-white/25"
+                          />
+                          <div className="flex items-center justify-between gap-2">
+                            <button
+                              type="button"
+                              onClick={handleSavePrefs}
+                              disabled={isPending}
+                              className="rounded-xl bg-white/10 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-white/20 disabled:opacity-40"
+                            >
+                              {isPending ? "Saving..." : "Save rules"}
+                            </button>
+                            {savedFlash && (
+                              <span className="text-xs text-emerald-400/90">
+                                Saved
+                              </span>
+                            )}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                </>
+              )}
             </motion.div>
           )}
 

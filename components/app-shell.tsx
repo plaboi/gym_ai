@@ -40,12 +40,14 @@ interface AppShellProps {
   lastWorkoutAt: string | null;
   initialPreferences: string;
   workoutHistory: WorkoutHistoryEntry[];
+  userName: string | null;
 }
 
 export default function AppShell({
   lastWorkoutAt,
   initialPreferences,
   workoutHistory,
+  userName,
 }: AppShellProps) {
   const router = useRouter();
   const [screen, setScreen] = useState<Screen>("landing");
@@ -90,6 +92,7 @@ export default function AppShell({
           lastWorkoutAt={lastWorkoutAt}
           initialPreferences={initialPreferences}
           workoutHistory={workoutHistory}
+          userName={userName}
           onStart={handleStart}
         />
       )}

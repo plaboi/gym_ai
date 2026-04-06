@@ -269,6 +269,24 @@ export async function getLastWorkoutTimestamp(): Promise<string | null> {
   }
 }
 
+export async function getUserName(clerkId: string): Promise<string | null> {
+  try {
+    const user = await db.query.users.findFirst({
+      where: eq(users.clerkId, clerkId),
+    });
+    return user?.name ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function saveName(name: string): Promise<string> {
+  const userId = await ensureUser();
+  const trimmed = name.trim();
+  await db.update(users).set({ name: trimmed }).where(eq(users.id, userId));
+  return trimmed;
+}
+
 export interface HistoryExercise {
   name: string;
   sets: number;
