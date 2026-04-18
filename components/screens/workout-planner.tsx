@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo, useTransition, useRef } from "react";
+import { useEffect, useState, useMemo, useTransition, useRef, useCallback } from "react";
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import { generateWorkout, modifyWorkout } from "@/lib/actions";
@@ -10,20 +10,30 @@ import type { GeneratedExercise } from "../app-shell";
 
 interface WorkoutPlannerProps {
   splitType: string;
+  customLabel?: string;
   duration: number;
   startTime: number;
+  restoredExercises?: GeneratedExercise[];
+  onExercisesChange?: (exercises: GeneratedExercise[]) => void;
   onComplete: (exercises: GeneratedExercise[]) => void;
 }
 
 export default function WorkoutPlanner({
   splitType,
+  customLabel,
   duration,
   startTime,
+  restoredExercises,
+  onExercisesChange,
   onComplete,
 }: WorkoutPlannerProps) {
-  const [exercises, setExercises] = useState<GeneratedExercise[]>([]);
-  const [checked, setChecked] = useState<boolean[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [exercises, setExercisesRaw] = useState<GeneratedExercise[]>(
+    restoredExercises ?? []
+  );
+  const [checked, setChecked] = useState<boolean[]>(
+    restoredExercises ? new Array(restoredExercises.length).fill(false) : []
+  );
+  const [loading, setLoading] = useState(!restoredExercises);
   const [modifying, setModifying] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [chatInput, setChatInput] = useState("");
@@ -33,10 +43,19 @@ export default function WorkoutPlanner({
   const inputRef = useRef<HTMLInputElement>(null);
   const { hhmmss } = useTimer(startTime);
 
+  const setExercises = useCallback(
+    (exs: GeneratedExercise[]) => {
+      setExercisesRaw(exs);
+      onExercisesChange?.(exs);
+    },
+    [onExercisesChange]
+  );
+
   useEffect(() => {
+    if (restoredExercises && restoredExercises.length > 0) return;
     startTransition(async () => {
       try {
-        const result = await generateWorkout(splitType, duration);
+        const result = await generateWorkout(splitType, duration, customLabel);
         setExercises(result);
         setChecked(new Array(result.length).fill(false));
       } catch (e) {
@@ -45,7 +64,7 @@ export default function WorkoutPlanner({
         setLoading(false);
       }
     });
-  }, [splitType, duration]);
+  }, [splitType, customLabel, duration, restoredExercises, setExercises]);
 
   const toggleExercise = (index: number) => {
     setChecked((prev) => {
@@ -69,7 +88,8 @@ export default function WorkoutPlanner({
           message,
           splitType,
           duration,
-          savePref
+          savePref,
+          customLabel
         );
         setExercises(result);
         setChecked(new Array(result.length).fill(false));

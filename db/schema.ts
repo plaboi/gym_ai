@@ -5,6 +5,7 @@ import {
   integer,
   boolean,
   timestamp,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 export const users = pgTable("users", {
@@ -52,3 +53,21 @@ export const userPreferences = pgTable("user_preferences", {
     .defaultNow()
     .notNull(),
 });
+
+export const customCategories = pgTable(
+  "custom_categories",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .references(() => users.id, { onDelete: "cascade" })
+      .notNull(),
+    name: text("name").notNull(),
+    isGym: boolean("is_gym").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (t) => ({
+    uniqUserCategory: uniqueIndex("uniq_user_category").on(t.userId, t.name),
+  })
+);

@@ -6,14 +6,17 @@ import Body from "react-muscle-highlighter";
 import { completeWorkout } from "@/lib/actions";
 import { lookupExercise } from "@/lib/exercise-lookup";
 import { mapMuscles } from "@/lib/muscle-map";
-import type { GeneratedExercise } from "../app-shell";
+import type { GeneratedExercise, SummaryMode } from "../app-shell";
 
 interface SummaryScreenProps {
   splitType: string;
+  categoryLabel: string;
   duration: number;
   exercises: GeneratedExercise[];
   startTime: number;
   userGender: string | null;
+  mode: SummaryMode;
+  activityElapsedSeconds: number;
   onFinish: () => void;
 }
 
@@ -23,23 +26,32 @@ const SPLIT_LABELS: Record<string, string> = {
   back_bi: "Back + Bi",
 };
 
+function formatElapsed(ms: number) {
+  const mins = Math.floor(ms / 60000);
+  const secs = Math.floor((ms % 60000) / 1000);
+  return `${mins}:${secs.toString().padStart(2, "0")}`;
+}
+
 export default function SummaryScreen({
   splitType,
+  categoryLabel,
   duration,
   exercises,
   startTime,
   userGender,
+  mode,
+  activityElapsedSeconds,
   onFinish,
 }: SummaryScreenProps) {
   const [saving, setSaving] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   const elapsed = useMemo(() => {
-    const diffMs = Date.now() - startTime;
-    const mins = Math.floor(diffMs / 60000);
-    const secs = Math.floor((diffMs % 60000) / 1000);
-    return `${mins}:${secs.toString().padStart(2, "0")}`;
-  }, [startTime]);
+    if (mode === "activity") {
+      return formatElapsed(activityElapsedSeconds * 1000);
+    }
+    return formatElapsed(Date.now() - startTime);
+  }, [mode, startTime, activityElapsedSeconds]);
 
   const totalSets = exercises.reduce(
     (sum, ex) => sum + ex.recommended_sets,
@@ -47,18 +59,23 @@ export default function SummaryScreen({
   );
 
   const bodyData = useMemo(() => {
+    if (mode === "activity") return [];
     const allMuscles: string[] = [];
     for (const ex of exercises) {
       const info = lookupExercise(ex.name);
       allMuscles.push(...info.primaryMuscles, ...info.secondaryMuscles);
     }
     return mapMuscles(allMuscles);
-  }, [exercises]);
+  }, [exercises, mode]);
 
   const gender: "male" | "female" =
     userGender === "female" ? "female" : "male";
 
   const handleFinish = () => {
+    if (mode === "activity") {
+      onFinish();
+      return;
+    }
     setSaving(true);
     startTransition(async () => {
       try {
@@ -71,11 +88,17 @@ export default function SummaryScreen({
     });
   };
 
-  const stats = [
-    { label: "Time Elapsed", value: elapsed },
-    { label: "Exercises", value: exercises.length },
-    { label: "Total Sets", value: totalSets },
-  ];
+  const headingLabel =
+    categoryLabel || SPLIT_LABELS[splitType] || splitType;
+
+  const stats =
+    mode === "activity"
+      ? [{ label: "Time Elapsed", value: elapsed }]
+      : [
+          { label: "Time Elapsed", value: elapsed },
+          { label: "Exercises", value: exercises.length },
+          { label: "Total Sets", value: totalSets },
+        ];
 
   return (
     <motion.div
@@ -91,39 +114,45 @@ export default function SummaryScreen({
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.2 }}
       >
-        <h2 className="text-2xl font-bold text-white">Workout Complete</h2>
-        <p className="text-sm text-muted">
-          {SPLIT_LABELS[splitType] ?? splitType}
-        </p>
+        <h2 className="text-2xl font-bold text-white">
+          {mode === "activity" ? "Activity Complete" : "Workout Complete"}
+        </h2>
+        <p className="text-sm text-muted">{headingLabel}</p>
       </motion.div>
 
-      <motion.div
-        className="my-6 flex items-center justify-center gap-4"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.3 }}
+      {mode === "gym" && (
+        <motion.div
+          className="my-6 flex items-center justify-center gap-4"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.3 }}
+        >
+          <Body
+            data={bodyData}
+            side="front"
+            gender={gender}
+            scale={1.2}
+            border="none"
+            defaultFill="#1a1a1a"
+            colors={["#ffffff"]}
+          />
+          <Body
+            data={bodyData}
+            side="back"
+            gender={gender}
+            scale={1.2}
+            border="none"
+            defaultFill="#1a1a1a"
+            colors={["#ffffff"]}
+          />
+        </motion.div>
+      )}
+
+      <div
+        className={`flex w-full justify-around ${
+          mode === "activity" ? "mt-10" : ""
+        }`}
       >
-        <Body
-          data={bodyData}
-          side="front"
-          gender={gender}
-          scale={1.2}
-          border="none"
-          defaultFill="#1a1a1a"
-          colors={["#ffffff"]}
-        />
-        <Body
-          data={bodyData}
-          side="back"
-          gender={gender}
-          scale={1.2}
-          border="none"
-          defaultFill="#1a1a1a"
-          colors={["#ffffff"]}
-        />
-      </motion.div>
-
-      <div className="flex w-full justify-around">
         {stats.map((stat, i) => (
           <motion.div
             key={stat.label}

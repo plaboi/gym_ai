@@ -3,8 +3,14 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { auth } from "@clerk/nextjs/server";
 import { db } from "@/db";
-import { users, workouts, exercises, userPreferences } from "@/db/schema";
-import { eq, desc } from "drizzle-orm";
+import {
+  users,
+  workouts,
+  exercises,
+  userPreferences,
+  customCategories,
+} from "@/db/schema";
+import { eq, desc, asc } from "drizzle-orm";
 
 export interface GeneratedExercise {
   name: string;
@@ -136,9 +142,11 @@ async function callGemini(prompt: string): Promise<GeneratedExercise[]> {
 
 export async function generateWorkout(
   splitType: string,
-  durationMinutes: number
+  durationMinutes: number,
+  customLabel?: string
 ): Promise<GeneratedExercise[]> {
-  const splitLabel = SPLIT_LABELS[splitType] ?? splitType;
+  const splitLabel =
+    customLabel?.trim() || SPLIT_LABELS[splitType] || splitType;
 
   let historyContext = "No previous workout history.";
   let prefsBlock = "The user has not set any persistent workout preferences.";
@@ -168,9 +176,11 @@ export async function modifyWorkout(
   userMessage: string,
   splitType: string,
   durationMinutes: number,
-  saveAsPreference?: boolean
+  saveAsPreference?: boolean,
+  customLabel?: string
 ): Promise<GeneratedExercise[]> {
-  const splitLabel = SPLIT_LABELS[splitType] ?? splitType;
+  const splitLabel =
+    customLabel?.trim() || SPLIT_LABELS[splitType] || splitType;
 
   let historyContext = "No previous workout history.";
   let prefsBlock = "The user has not set any persistent workout preferences.";
@@ -422,4 +432,72 @@ export async function getWorkoutHistoryForCalendar(
   } catch {
     return [];
   }
+}
+
+export interface CustomCategory {
+  id: string;
+  name: string;
+  isGym: boolean;
+}
+
+export async function getCustomCategories(
+  clerkId: string
+): Promise<CustomCategory[]> {
+  try {
+    const user = await db.query.users.findFirst({
+      where: eq(users.clerkId, clerkId),
+    });
+    if (!user) return [];
+
+    const rows = await db
+      .select()
+      .from(customCategories)
+      .where(eq(customCategories.userId, user.id))
+      .orderBy(asc(customCategories.createdAt));
+
+    return rows.map((r) => ({ id: r.id, name: r.name, isGym: r.isGym }));
+  } catch {
+    return [];
+  }
+}
+
+export async function createCustomCategory(
+  name: string,
+  isGym: boolean
+): Promise<CustomCategory> {
+  const userId = await ensureUser();
+  const normalized = name.trim().toLowerCase();
+  if (!normalized) throw new Error("Category name is required");
+
+  await db
+    .insert(customCategories)
+    .values({ userId, name: normalized, isGym })
+    .onConflictDoNothing();
+
+  const rows = await db
+    .select()
+    .from(customCategories)
+    .where(eq(customCategories.userId, userId));
+  const match = rows.find((r) => r.name === normalized);
+  if (!match) throw new Error("Failed to create category");
+
+  return { id: match.id, name: match.name, isGym: match.isGym };
+}
+
+export async function completeActivity(
+  name: string,
+  durationSeconds: number
+): Promise<{ success: true }> {
+  const userId = await ensureUser();
+  const durationMinutes = Math.max(1, Math.round(durationSeconds / 60));
+  const normalized = name.trim().toLowerCase() || "activity";
+
+  await db.insert(workouts).values({
+    userId,
+    splitType: normalized,
+    durationMinutes,
+    completedAt: new Date(),
+  });
+
+  return { success: true };
 }

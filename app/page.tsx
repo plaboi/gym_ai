@@ -6,7 +6,9 @@ import AppShell from "@/components/app-shell";
 import {
   getWorkoutHistoryForCalendar,
   getUserProfile,
+  getCustomCategories,
   type WorkoutHistoryEntry,
+  type CustomCategory,
 } from "@/lib/actions";
 
 async function getLastWorkoutTimestamp(
@@ -58,6 +60,9 @@ export default async function Home() {
     ? await getWorkoutHistoryForCalendar(userId)
     : [];
   const userProfile = userId ? await getUserProfile(userId) : null;
+  const customCategories: CustomCategory[] = userId
+    ? await getCustomCategories(userId)
+    : [];
 
   return (
     <AppShell
@@ -65,6 +70,7 @@ export default async function Home() {
       initialPreferences={initialPreferences}
       workoutHistory={workoutHistory}
       userProfile={userProfile}
+      customCategories={customCategories}
     />
   );
 }

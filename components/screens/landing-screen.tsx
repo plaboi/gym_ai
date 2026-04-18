@@ -28,6 +28,13 @@ const SPLIT_LABELS: Record<string, string> = {
   back_bi: "Back + Bi",
 };
 
+function titleCaseSplit(s: string) {
+  return s
+    .split(/[\s_]+/)
+    .map((w) => (w ? w[0].toUpperCase() + w.slice(1) : w))
+    .join(" ");
+}
+
 const DAY_NAMES = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 
 const GOALS = [
@@ -92,7 +99,7 @@ function WorkoutCard({ entry }: { entry: WorkoutHistoryEntry }) {
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm font-medium text-white">
-            {SPLIT_LABELS[entry.splitType] ?? entry.splitType}
+            {SPLIT_LABELS[entry.splitType] ?? titleCaseSplit(entry.splitType)}
           </p>
           <p className="text-xs text-white/40">
             {entry.exerciseCount} exercises &middot; {entry.durationMinutes} min
